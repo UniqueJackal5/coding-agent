@@ -1,7 +1,9 @@
 # app.py
-import streamlit as st
 import os
+import streamlit as st
 from gemini_core import call_gemini  # We reuse our existing connector!
+from file_reader import get_project_context
+
 
 # --- Page Configuration ---
 # This should be the first Streamlit command in your script.
@@ -16,33 +18,28 @@ st.title("🤖 Gemini Coding Agent")
 st.write("An interactive chat agent to help you write and modify code. Just upload a file and start chatting!")
 
 
-# --- Helper function to read file content ---
-def read_file_content(uploaded_file):
-    """Reads the content of an uploaded file."""
-    if uploaded_file is not None:
-        try:
-            return uploaded_file.getvalue().decode("utf-8")
-        except Exception as e:
-            st.error(f"Error reading file: {e}")
-            return None
-    return None
-
-
 # --- The Main Application Logic ---
 
-# Sidebar for file upload and controls
+# Sidebar for project directory selection and controls
 with st.sidebar:
     st.header("Controls")
-    uploaded_file = st.file_uploader("Upload a code file", type=['py', 'txt', 'js', 'html', 'css', 'md'])
+    project_directory = st.text_input("Enter Project Directory (e.g., . for current)", ".")
     
-    # Read the file content when a file is uploaded
-    file_content = read_file_content(uploaded_file)
-    
-    if uploaded_file:
-        st.success(f"Loaded `{uploaded_file.name}`")
-        # Display file content in an expandable box
-        with st.expander("View File Content"):
-            st.code(file_content, language='python') # You can change the language
+    project_context = ""
+    if project_directory:
+        try:
+            # Get absolute path for get_project_context
+            abs_project_directory = os.path.abspath(project_directory)
+            st.write(f"Analyzing directory: `{abs_project_directory}`")
+            project_context = get_project_context(abs_project_directory)
+            if project_context:
+                st.success(f"Loaded project context from `{project_directory}`")
+                with st.expander("View Project Context"):
+                    st.code(project_context, language='python') # Display as generic code
+            else:
+                st.warning("No relevant files found in the specified directory.")
+        except Exception as e:
+            st.error(f"Error reading project directory: {e}")
 
 # Initialize chat history in Streamlit's session state
 # This makes the history persist between reruns (i.e., when you send a message)
@@ -55,7 +52,7 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # React to user input from the chat box
-if prompt := st.chat_input("What change would you like to make?"):
+if prompt := st.chat_input("What change would you like to make?", key="chat_input_main"):
     # Display user message in chat message container
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -63,24 +60,22 @@ if prompt := st.chat_input("What change would you like to make?"):
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # Check if a file has been uploaded
-    if not file_content:
-        st.warning("Please upload a code file first to provide context for your request.")
+    # Check if project context has been loaded
+    if not project_context:
+        st.warning("Please specify a project directory to provide context for your request.")
     else:
         # Construct the full prompt for the LLM
-        # We'll include the last few messages for conversation context if you want,
-        # but for a simple file-based agent, just the file content is often enough.
         final_prompt = f"""
         You are an expert pair-programming assistant.
-        The user has provided the following code file content:
+        The user has provided the following project context:
 
-        --- START OF FILE CONTENT ---
-        {file_content}
-        --- END OF FILE CONTENT ---
+        --- START OF PROJECT CONTEXT ---
+        {project_context}
+        --- END OF PROJECT CONTEXT ---
 
         The user's request is: "{prompt}"
 
-        Based on the file content and the user request, generate the required code.
+        Based on the project context and the user request, generate the required code.
         Provide only the raw code block unless the user asks for an explanation.
         """
 
@@ -98,4 +93,5 @@ if prompt := st.chat_input("What change would you like to make?"):
                     response = None
 
         # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        if response:
+            st.session_state.messages.append({"role": "assistant", "content": response})
