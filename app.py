@@ -87,8 +87,15 @@ if prompt := st.chat_input("What change would you like to make?"):
         # Display "thinking" message while waiting for the response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                response = call_gemini(final_prompt)
-                st.code(response, language='python') # Use st.code for beautiful formatting
+                try:
+                    response = call_gemini(final_prompt)
+                    st.code(response, language='python') # Use st.code for beautiful formatting
+                except ValueError as e:
+                    st.error(f"Configuration Error: {e}. Please ensure your `GEMINI_API_KEY` is correctly set.")
+                    response = None
+                except Exception as e:
+                    st.error(f"An unexpected error occurred: {e}")
+                    response = None
 
         # Add assistant response to chat history
         st.session_state.messages.append({"role": "assistant", "content": response})

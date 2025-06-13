@@ -16,6 +16,9 @@ if not API_KEY:
 genai.configure(api_key=API_KEY)
 
 def call_gemini(prompt: str) -> str:
+    # Ensure API_KEY is set before proceeding
+    if not API_KEY:
+        raise ValueError("The GEMINI_API_KEY environment variable is not set. Please set it in your command prompt before running the agent.")
     """
     Sends a prompt to the Gemini model via the Google AI Studio API.
 
